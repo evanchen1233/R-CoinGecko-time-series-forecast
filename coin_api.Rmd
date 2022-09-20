@@ -1,0 +1,98 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+Within this project, I would like to explore the  CoinGecko API and the package "geckor" in R.
+Then I would collect the current and historical cryptocurrency market data for a coin using the public 'CoinGecko' API and do a Arima forecast.
+
+```{r setup, include=FALSE, fig.width=8, fig.height=8}
+library(geckor)
+library(dplyr)
+library(tseries)
+library(forecast)
+library(Metrics)
+library(ggplot2)
+```
+
+
+Let's use bitcoin as an example here. First, I want to obtain historical data for bitcoin.
+The function "coin_history" can retrieve coin-specific market data for the last n days. If  open-high-low-close price data is needed, use function "coin_history_ohlc" instead.
+
+
+```{r}
+r <- coin_history(coin_id = "bitcoin", vs_currency = "usd", days = "max")
+r
+```
+
+Since we only need timestamp and price from obtained data, I save them in a dataframe
+and convert it to timeserie formatt for later use. So now df has all daily market price
+for bitcoin.
+
+```{r}
+var <- c("timestamp", "price")
+df <- r[var]
+df <- df[c(1:nrow(df) - 1),]
+df <- ts(df["price"], start = c(2013,4,28), frequency = 365)
+```
+
+Now, let's define the training and testing period. I will use the last 7 days as 
+testing set and all other historical data as training set.
+
+```{r}
+n = nrow(df)
+n1 = nrow(df) - 6
+n2 = nrow(df) - 7
+
+df_train = ts(df[c(4:n2),])
+df_test = ts(df[c(n1:n),])
+df_full = ts(df[c(4:n),])
+```
+
+We now need to check the stationary of our data. We need a unstationary data because 
+a stationary time series is one whose properties do not depend on the time at which the 
+series is observed. We can do that with the Augmented Dickey-Fuller Test.
+
+H0: The time series is non-stationary. 
+H1: The time series is stationary.
+Since the p-value is not less than .05, we fail to reject the null hypothesis.
+This means the time series is non-stationary. our data is depend on the time at 
+which the series is observed.
+
+```{r}
+adf.test(df_full)
+```
+We will run the auto.arima function on our training data, which will help us to forecast
+next 7 days market price and prediction intervals. 
+
+```{r}
+model <- auto.arima(df_train)
+fcast <- forecast(model, h = 7, level = 95)
+
+fcast
+```
+
+let's create a table of predicted price and actual price.
+
+```{r}
+result <- cbind(df_test,as.numeric(fcast$mean))
+colnames(result) <- c("Actual","Predicted")
+result
+```
+
+Now, let's get the Metrics MAPE which is used to judge the performance of the model.
+we have a mape of 12.49%, which means the average deviation between the forecasted value 
+and actual values was 12.49%.
+
+```{r}
+mape <- mape(df_test,as.numeric(fcast$mean))
+
+mape*100
+```
+
+Lastly plot the historical price for bitcion, certainly the price has been jumping insane
+last few years.
+
+```{r}
+autoplot(fcast) + (labs(y = "Price", x = "Days"))
+```
