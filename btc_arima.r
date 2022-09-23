@@ -13,7 +13,6 @@ r <- coin_history(coin_id = "bitcoin", vs_currency = "usd", days = "max")
 var <- c("timestamp", "price")
 df <- r[var]
 df <- df[c(1:nrow(df) - 1),]
-tail(df,10)
 date <- df$timestamp
 start_date <- date[1]
 dayOfYear <- as.numeric(format(as.Date(start_date),"%j"))
