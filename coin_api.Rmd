@@ -27,43 +27,45 @@ r
 
 Since we only need timestamp and price from obtained data, I save them in a dataframe
 and convert it to timeserie formatt for later use. So now df has all daily market price
-for bitcoin.
+for bitcoin. Below is last 7 days price in ts object.
 
 ```{r}
 var <- c("timestamp", "price")
 df <- r[var]
 df <- df[c(1:nrow(df) - 1),]
-df <- ts(df["price"], start = c(2013,4,28), frequency = 365)
+date <- df$timestamp
+start_date <- date[1]
+dayOfYear <- as.numeric(format(as.Date(start_date),"%j"))
+year <- as.numeric(format(as.Date(start_date),"%Y"))
+df <- ts(df$price, start = c(year, dayOfYear), frequency = 365)
+tail(df,7)
 ```
 
 Now, let's define the training and testing period. I will use the last 7 days as 
 testing set and all other historical data as training set.
 
 ```{r}
-n = nrow(df)
-n1 = nrow(df) - 6
-n2 = nrow(df) - 7
+n = length(df)
+n1 = n - 6
+n2 = n - 7
 
-df_train = ts(df[c(4:n2),])
-df_test = ts(df[c(n1:n),])
-df_full = ts(df[c(4:n),])
+df_train = df[c(1:n2)]
+df_test = df[c(n1:n)]
 ```
 
-We now need to check the stationary of our data. We need a unstationary data because 
-a stationary time series is one whose properties do not depend on the time at which the 
-series is observed. We can do that with the Augmented Dickey-Fuller Test.
+We now need to check the stationary of our data.  We can do that with the Augmented Dickey-Fuller Test.
 
 H0: The time series is non-stationary. 
 H1: The time series is stationary.
 Since the p-value is not less than .05, we fail to reject the null hypothesis.
-This means the time series is non-stationary. our data is depend on the time at 
+This means the time series is non-stationary. Our data is depend on the time at 
 which the series is observed.
 
 ```{r}
-adf.test(df_full)
+adf.test(df)
 ```
 We will run the auto.arima function on our training data, which will help us to forecast
-next 7 days market price and prediction intervals. 
+next 7 days market price and their prediction intervals. 
 
 ```{r}
 model <- auto.arima(df_train)
@@ -80,9 +82,7 @@ colnames(result) <- c("Actual","Predicted")
 result
 ```
 
-Now, let's get the Metrics MAPE which is used to judge the performance of the model.
-we have a mape of 12.49%, which means the average deviation between the forecasted value 
-and actual values was 12.49%.
+Now, let's get the Metrics MAPE which is used to judge the performance of the model.It gives the average deviation between the forecast value and actual values.
 
 ```{r}
 mape <- mape(df_test,as.numeric(fcast$mean))
@@ -90,7 +90,7 @@ mape <- mape(df_test,as.numeric(fcast$mean))
 mape*100
 ```
 
-Lastly plot the historical price for bitcion, certainly the price has been jumping insane
+Lastly, plot the historical price for bitcion, certainly the price has been jumping insane
 last few years.
 
 ```{r}
