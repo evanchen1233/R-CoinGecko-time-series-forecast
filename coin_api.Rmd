@@ -14,20 +14,21 @@ library(forecast)
 library(Metrics)
 library(ggplot2)
 ```
+# Data preparation
 
-
-Let's use bitcoin as an example here. First, I want to obtain historical data for bitcoin.
+Let's use dogecoin as an example here. First, I want to obtain historical data for dogecoin.
 The function "coin_history" can retrieve coin-specific market data for the last n days. If  open-high-low-close price data is needed, use function "coin_history_ohlc" instead.
 
 
 ```{r}
-r <- coin_history(coin_id = "bitcoin", vs_currency = "usd", days = "max")
+r <- coin_history(coin_id = "dogecoin", vs_currency = "usd", days = "max")
 r
 ```
 
-Since we only need timestamp and price from obtained data, I save them in a dataframe
+Since we only need date and price from obtained data, I save them in a dataframe
 and convert it to timeserie formatt for later use. So now df has all daily market price
-for bitcoin. Below is last 7 days price in ts object.
+for dogecoin. Below is last 7 days price in ts object. Since each coin has different start
+date in coin market, we need to record the first date in df.
 
 ```{r}
 var <- c("timestamp", "price")
@@ -41,16 +42,15 @@ df <- ts(df$price, start = c(year, dayOfYear), frequency = 365)
 tail(df,7)
 ```
 
-Now, let's define the training and testing period. I will use the last 7 days as 
-testing set and all other historical data as training set.
+Now, let's define the training and test period. I will use the last 7 days as 
+test set and all other historical data as training set.
 
 ```{r}
-n = length(df)
-n1 = n - 6
-n2 = n - 7
+train_end <-  length(df) - 7
+test_start <-  length(df) - 6
 
-df_train = df[c(1:n2)]
-df_test = df[c(n1:n)]
+df_train <-  ts(df[c(1:train_end)])
+df_test <-  ts(df[c(test_start:length(df))])
 ```
 
 We now need to check the stationary of our data.  We can do that with the Augmented Dickey-Fuller Test.
@@ -64,35 +64,48 @@ which the series is observed.
 ```{r}
 adf.test(df)
 ```
+# Time series modeling
+## ARIMA models which aim to describe the autocorrelations in the data.
 We will run the auto.arima function on our training data, which will help us to forecast
 next 7 days market price and their prediction intervals. 
 
 ```{r}
-model <- auto.arima(df_train)
-fcast <- forecast(model, h = 7, level = 95)
+fit_arima <- auto.arima(df_train)
+fcast_arima <- forecast(fit_arima, h = 7, level = 95)
 
-fcast
-```
-
-let's create a table of predicted price and actual price.
-
-```{r}
-result <- cbind(df_test,as.numeric(fcast$mean))
-colnames(result) <- c("Actual","Predicted")
-result
+fcast_arima
 ```
 
 Now, let's get the Metrics MAPE which is used to judge the performance of the model.It gives the average deviation between the forecast value and actual values.
 
 ```{r}
-mape <- mape(df_test,as.numeric(fcast$mean))
-
-mape*100
+mape_arima <- mape(df_test,as.numeric(fcast_arima$mean))*100
+mape_arima
 ```
+## Exponential smoothing models (ETS) are based on a description of the trend and seasonality in the data.
+```{r}
+fit_ets <- ets(df_train)
+fcast_ets <- forecast(fit_ets, h = 7, level = 95)
+
+mape_ets <- mape(df_test,as.numeric(fcast_ets$mean))*100
+mape_ets
+```
+
+let's create a table of predicted price, actual price and their MAPE at last row. This will help 
+us to do comparison.
+
+```{r}
+result <- cbind(df_test,as.numeric(fcast_arima$mean),as.numeric(fcast_ets$mean))
+result <- rbind(result,c(0,mape_arima,mape_ets))
+colnames(result) <- c("Actual","ARIMA","ETS")
+round(result,4)
+```
+
+
 
 Lastly, plot the historical price for bitcion, certainly the price has been jumping insane
 last few years.
 
 ```{r}
-autoplot(fcast) + (labs(y = "Price", x = "Days"))
+autoplot(fcast_arima) + (labs(y = "Price", x = "Days"))
 ```
